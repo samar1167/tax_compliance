@@ -1540,6 +1540,23 @@ SOURCE_TYPE_TEST_RECORDS = {
 
 class ReturnSourceCaptureService:
     @staticmethod
+    def list_sessions() -> list[dict[str, Any]]:
+        return [
+            {
+                "id": session.id,
+                "return_type": session.return_type,
+                "assessment_year": session.assessment_year,
+                "financial_year": session.financial_year,
+                "taxpayer_pan": session.taxpayer_pan,
+                "taxpayer_name": session.taxpayer_name,
+                "status": session.status,
+                "updated_at": session.updated_at.isoformat(),
+                "created_at": session.created_at.isoformat(),
+            }
+            for session in ReturnSourceCaptureSession.objects.all().order_by("-updated_at")
+        ]
+
+    @staticmethod
     def get_source_types(return_type: str) -> list[dict[str, Any]]:
         normalized = return_type.upper()
         if normalized not in SOURCE_TYPE_CATALOG:

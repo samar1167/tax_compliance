@@ -68,11 +68,58 @@ export function fetchKnowledgeBaseSummary() {
   return request("/api/knowledge-base/summary/");
 }
 
+export function fetchKnowledgeBaseVersions() {
+  return request("/api/knowledge-base/versions/");
+}
+
+export function fetchKnowledgeBaseVersionDetail(versionId) {
+  return request(`/api/knowledge-base/versions/${versionId}/`);
+}
+
+export function importKnowledgeBasePackage(payload) {
+  return request("/api/knowledge-base/import/", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function validateKnowledgeBaseVersion(versionId) {
+  return request(`/api/knowledge-base/versions/${versionId}/validate/`, {
+    method: "POST",
+  });
+}
+
+export function activateKnowledgeBaseVersion(versionId) {
+  return request(`/api/knowledge-base/versions/${versionId}/activate/`, {
+    method: "POST",
+  });
+}
+
+export function fetchKnowledgeBaseBundles(versionId) {
+  return request(`/api/knowledge-base/versions/${versionId}/bundles/`);
+}
+
+export function activateKnowledgeBaseBundle(versionId, bundleCode) {
+  return request(`/api/knowledge-base/versions/${versionId}/bundles/${bundleCode}/activate/`, {
+    method: "POST",
+  });
+}
+
+export function deactivateKnowledgeBaseBundle(versionId, bundleCode) {
+  return request(`/api/knowledge-base/versions/${versionId}/bundles/${bundleCode}/deactivate/`, {
+    method: "POST",
+  });
+}
+
 export function createTaxUserSession(payload) {
   return request("/api/return-sources/sessions/", {
     method: "POST",
     body: payload,
   });
+}
+
+export function fetchReturnSourceSessions() {
+  return request("/api/return-sources/sessions/");
 }
 
 export function fetchReturnSourceTypes(returnType) {

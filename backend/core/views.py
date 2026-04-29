@@ -3,7 +3,7 @@ import json
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .models import FilingAssessment, KnowledgeBaseVersion, ReturnSourceCaptureSession
 from .services import (
@@ -221,8 +221,11 @@ def return_source_test_records(request: HttpRequest) -> JsonResponse:
 
 
 @csrf_exempt
-@require_POST
+@require_http_methods(["GET", "POST"])
 def create_return_source_session(request: HttpRequest) -> JsonResponse:
+    if request.method == "GET":
+        return JsonResponse({"sessions": ReturnSourceCaptureService.list_sessions()})
+
     try:
         payload = json.loads(request.body.decode("utf-8")) if request.body else {}
     except json.JSONDecodeError:

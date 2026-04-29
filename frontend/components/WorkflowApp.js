@@ -8,6 +8,7 @@ import {
   fetchHealth,
   fetchKnowledgeBaseSummary,
   fetchReturnSourceSession,
+  fetchReturnSourceSessions,
   fetchReturnSourceTestRecords,
   fetchReturnSourceTypes,
   prepareValidation,
@@ -191,6 +192,7 @@ export default function WorkflowApp() {
   const [sourceTypes, setSourceTypes] = useState([]);
   const [savingUser, setSavingUser] = useState(false);
   const [userError, setUserError] = useState("");
+  const [availableSessions, setAvailableSessions] = useState([]);
   const [resumeSessionId, setResumeSessionId] = useState("");
   const [resumeState, setResumeState] = useState("idle");
   const [resumeError, setResumeError] = useState("");
@@ -230,6 +232,10 @@ export default function WorkflowApp() {
         if (!cancelled) {
           setHealth(healthResponse);
           setKnowledgeBase(kbResponse);
+        }
+        const sessionsResponse = await fetchReturnSourceSessions();
+        if (!cancelled) {
+          setAvailableSessions(sessionsResponse.sessions || []);
         }
       } catch (error) {
         if (!cancelled) {
@@ -310,6 +316,8 @@ export default function WorkflowApp() {
     try {
       const response = await createTaxUserSession(taxUser);
       setSession(response.session);
+      const sessionsResponse = await fetchReturnSourceSessions();
+      setAvailableSessions(sessionsResponse.sessions || []);
       const sourceTypeResponse = await fetchReturnSourceTypes(taxUser.return_type);
       setSourceTypes(sourceTypeResponse.source_types || []);
       setSelectedSourceType(sourceTypeResponse.source_types?.[0]?.source_type || "");
@@ -325,8 +333,10 @@ export default function WorkflowApp() {
     const response = await fetchReturnSourceSession(sessionId);
     const loadedSession = response.session;
     const sourceTypeResponse = await fetchReturnSourceTypes(loadedSession.return_type);
+    const sessionsResponse = await fetchReturnSourceSessions();
 
     setSession(loadedSession);
+    setAvailableSessions(sessionsResponse.sessions || []);
     setSourceTypes(sourceTypeResponse.source_types || []);
     setSelectedSourceType(loadedSession.source_types?.[0]?.source_type || sourceTypeResponse.source_types?.[0]?.source_type || "");
     setTaxUser({
@@ -510,6 +520,11 @@ export default function WorkflowApp() {
           <p className="hero__lede">
             Guide a case from taxpayer creation through document-backed validation with strong visibility into missing fields, mismatches, and the backend’s recommendation trace.
           </p>
+          <div className="actions">
+            <a className="button" href="/knowledge-base">
+              Knowledge Base Ops
+            </a>
+          </div>
         </div>
         <div className="hero__panel">
           <StatusPill label="Backend" value={health?.status || (loadingBootstrap ? "checking" : "offline")} />
@@ -617,18 +632,27 @@ export default function WorkflowApp() {
               <form className="panel grid-form" onSubmit={handleResumeSession}>
                 <div className="panel__intro">
                   <h3>Load previous session</h3>
-                  <p>Resume an existing source-capture session by session ID and continue the workflow from its saved state.</p>
+                  <p>Resume an existing source-capture session from the dropdown and continue from its saved state.</p>
                 </div>
 
                 <label>
-                  Session ID
-                  <input
+                  Existing session
+                  <select
                     onChange={(event) => setResumeSessionId(event.target.value)}
-                    placeholder="12"
-                    type="number"
                     value={resumeSessionId}
-                  />
+                  >
+                    <option value="">Select a saved session</option>
+                    {availableSessions.map((savedSession) => (
+                      <option key={savedSession.id} value={savedSession.id}>
+                        #{savedSession.id} | {savedSession.taxpayer_name || "Unnamed"} | {savedSession.taxpayer_pan || "No PAN"} | {savedSession.return_type} | {savedSession.status}
+                      </option>
+                    ))}
+                  </select>
                 </label>
+
+                {!availableSessions.length ? (
+                  <p className="subtle">No previous sessions found yet.</p>
+                ) : null}
 
                 {resumeError ? <Banner tone="error" message={resumeError} /> : null}
 
