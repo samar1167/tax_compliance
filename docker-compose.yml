@@ -22,9 +22,5 @@ services:
     environment:
       API_BASE_URL: "http://backend:9010"
       NEXT_PUBLIC_API_BASE_URL: "http://localhost:9010"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
     depends_on:
       - backend

@@ -3,10 +3,11 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY frontend/package.json /app/package.json
-RUN npm install
+COPY frontend/package-lock.json /app/package-lock.json
+RUN npm ci
 
 COPY frontend /app
 
 EXPOSE 3011
 
-CMD ["sh", "-c", "mkdir -p .next && find .next -mindepth 1 -maxdepth 1 -exec rm -rf {} + && npm run dev"]
+CMD ["npm", "run", "dev"]

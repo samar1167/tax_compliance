@@ -1,4 +1,5 @@
 import json
+import math
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,8 @@ from .models import (
     KnowledgeBaseTestCase,
     KnowledgeBaseThreshold,
     KnowledgeBaseVersion,
+    ReturnSourceCaptureSession,
+    ReturnSourceDataEntry,
 )
 
 
@@ -792,3 +795,908 @@ class FilingEngine:
     @staticmethod
     def dump_pretty(data: dict[str, Any]) -> str:
         return json.dumps(data, indent=2, sort_keys=True)
+
+
+class ReturnPreparationService:
+    COMMON_FIELD_SPECS = [
+        {
+            "field_code": "residential_status",
+            "label": "Residential status",
+            "target_path": "profile.residential_status",
+            "sources": [
+                {"source_type": "declared_data", "path": "profile.residential_status"},
+                {"source_type": "personal_info", "path": "residential_status"},
+            ],
+            "required": True,
+            "authoritative_source_types": ["personal_info"],
+            "final_source_precedence": ["personal_info", "declared_data"],
+        },
+        {
+            "field_code": "salary_income",
+            "label": "Salary income",
+            "target_path": "income.salary_income",
+            "sources": [
+                {"source_type": "declared_data", "path": "income.salary_income"},
+                {"source_type": "form16", "path": "salary_income"},
+                {"source_type": "ais", "path": "salary_income"},
+            ],
+            "required": False,
+            "authoritative_source_types": ["form16", "ais"],
+            "final_source_precedence": ["form16", "ais", "declared_data"],
+            "tolerance": 1.0,
+        },
+        {
+            "field_code": "total_income",
+            "label": "Total income",
+            "target_path": "income.total_income",
+            "sources": [
+                {"source_type": "declared_data", "path": "income.total_income"},
+                {"source_type": "form16", "path": "total_income"},
+                {"source_type": "ais", "path": "total_income"},
+            ],
+            "required": True,
+            "authoritative_source_types": ["form16", "ais"],
+            "final_source_precedence": ["form16", "ais", "declared_data"],
+            "tolerance": 1.0,
+        },
+        {
+            "field_code": "total_income_before_adjustments",
+            "label": "Total income before deductions/exemptions",
+            "target_path": "income.total_income_before_specified_exemptions_and_chapter_via",
+            "sources": [
+                {
+                    "source_type": "declared_data",
+                    "path": "income.total_income_before_specified_exemptions_and_chapter_via",
+                },
+                {"source_type": "form16", "path": "total_income_before_specified_exemptions_and_chapter_via"},
+                {"source_type": "ais", "path": "total_income_before_specified_exemptions_and_chapter_via"},
+            ],
+            "required": True,
+            "authoritative_source_types": ["form16", "ais"],
+            "final_source_precedence": ["form16", "ais", "declared_data"],
+            "tolerance": 1.0,
+        },
+        {
+            "field_code": "aggregate_tds_tcs",
+            "label": "Aggregate TDS/TCS",
+            "target_path": "specified_triggers.aggregate_tds_tcs",
+            "sources": [
+                {"source_type": "declared_data", "path": "specified_triggers.aggregate_tds_tcs"},
+                {"source_type": "form26as", "path": "aggregate_tds_tcs"},
+                {"source_type": "ais", "path": "aggregate_tds_tcs"},
+            ],
+            "required": False,
+            "authoritative_source_types": ["form26as", "ais"],
+            "final_source_precedence": ["form26as", "ais", "declared_data"],
+            "tolerance": 1.0,
+        },
+        {
+            "field_code": "house_property_count",
+            "label": "House property count",
+            "target_path": "income.house_property_count",
+            "sources": [
+                {"source_type": "declared_data", "path": "income.house_property_count"},
+                {"source_type": "house_property_schedule", "path": "house_property_count"},
+            ],
+            "required": True,
+            "authoritative_source_types": ["house_property_schedule"],
+            "final_source_precedence": ["house_property_schedule", "declared_data"],
+        },
+        {
+            "field_code": "agricultural_income",
+            "label": "Agricultural income",
+            "target_path": "income.agricultural_income",
+            "sources": [
+                {"source_type": "declared_data", "path": "income.agricultural_income"},
+                {"source_type": "ais", "path": "agricultural_income"},
+            ],
+            "required": False,
+            "authoritative_source_types": ["ais"],
+            "final_source_precedence": ["ais", "declared_data"],
+            "tolerance": 1.0,
+        },
+        {
+            "field_code": "foreign_asset_flag",
+            "label": "Foreign asset flag",
+            "target_path": "profile.has_foreign_asset",
+            "sources": [
+                {"source_type": "declared_data", "path": "profile.has_foreign_asset"},
+                {"source_type": "personal_info", "path": "has_foreign_asset"},
+            ],
+            "required": False,
+            "authoritative_source_types": ["personal_info"],
+            "final_source_precedence": ["personal_info", "declared_data"],
+        },
+        {
+            "field_code": "foreign_signing_authority_flag",
+            "label": "Foreign signing authority flag",
+            "target_path": "profile.has_foreign_signing_authority",
+            "sources": [
+                {"source_type": "declared_data", "path": "profile.has_foreign_signing_authority"},
+                {"source_type": "personal_info", "path": "has_foreign_signing_authority"},
+            ],
+            "required": False,
+            "authoritative_source_types": ["personal_info"],
+            "final_source_precedence": ["personal_info", "declared_data"],
+        },
+        {
+            "field_code": "foreign_source_income_flag",
+            "label": "Foreign source income flag",
+            "target_path": "profile.has_foreign_source_income",
+            "sources": [
+                {"source_type": "declared_data", "path": "profile.has_foreign_source_income"},
+                {"source_type": "personal_info", "path": "has_foreign_source_income"},
+                {"source_type": "ais", "path": "has_foreign_source_income"},
+            ],
+            "required": False,
+            "authoritative_source_types": ["personal_info", "ais"],
+            "final_source_precedence": ["personal_info", "ais", "declared_data"],
+        },
+        {
+            "field_code": "director_flag",
+            "label": "Director in company flag",
+            "target_path": "profile.is_director_in_company",
+            "sources": [
+                {"source_type": "declared_data", "path": "profile.is_director_in_company"},
+                {"source_type": "personal_info", "path": "is_director_in_company"},
+            ],
+            "required": False,
+            "authoritative_source_types": ["personal_info"],
+            "final_source_precedence": ["personal_info", "declared_data"],
+        },
+        {
+            "field_code": "unlisted_shares_flag",
+            "label": "Held unlisted equity shares flag",
+            "target_path": "profile.held_unlisted_equity_shares",
+            "sources": [
+                {"source_type": "declared_data", "path": "profile.held_unlisted_equity_shares"},
+                {"source_type": "personal_info", "path": "held_unlisted_equity_shares"},
+            ],
+            "required": False,
+            "authoritative_source_types": ["personal_info"],
+            "final_source_precedence": ["personal_info", "declared_data"],
+        },
+    ]
+    ITR2_FIELD_SPECS = [
+        {
+            "field_code": "short_term_capital_gains",
+            "label": "Short-term capital gains",
+            "target_path": "income.short_term_capital_gains",
+            "sources": [
+                {"source_type": "declared_data", "path": "income.short_term_capital_gains"},
+                {"source_type": "capital_gains_statement", "path": "short_term_capital_gains"},
+                {"source_type": "ais", "path": "short_term_capital_gains"},
+            ],
+            "required": False,
+            "authoritative_source_types": ["capital_gains_statement", "ais"],
+            "final_source_precedence": ["capital_gains_statement", "ais", "declared_data"],
+            "tolerance": 1.0,
+        },
+        {
+            "field_code": "ltcg_112a_amount",
+            "label": "LTCG under section 112A",
+            "target_path": "income.ltcg_112a_amount",
+            "sources": [
+                {"source_type": "declared_data", "path": "income.ltcg_112a_amount"},
+                {"source_type": "capital_gains_statement", "path": "ltcg_112a_amount"},
+                {"source_type": "ais", "path": "ltcg_112a_amount"},
+            ],
+            "required": False,
+            "authoritative_source_types": ["capital_gains_statement", "ais"],
+            "final_source_precedence": ["capital_gains_statement", "ais", "declared_data"],
+            "tolerance": 1.0,
+        },
+        {
+            "field_code": "other_capital_gains_amount",
+            "label": "Other capital gains",
+            "target_path": "income.other_capital_gains_amount",
+            "sources": [
+                {"source_type": "declared_data", "path": "income.other_capital_gains_amount"},
+                {"source_type": "capital_gains_statement", "path": "other_capital_gains_amount"},
+                {"source_type": "ais", "path": "other_capital_gains_amount"},
+            ],
+            "required": False,
+            "authoritative_source_types": ["capital_gains_statement", "ais"],
+            "final_source_precedence": ["capital_gains_statement", "ais", "declared_data"],
+            "tolerance": 1.0,
+        },
+    ]
+
+    @staticmethod
+    def source_label(source_type: str) -> str:
+        labels = {
+            "declared_data": "Declared form data",
+            "personal_info": "Personal info document",
+            "form16": "Form 16",
+            "form26as": "Form 26AS",
+            "ais": "AIS/TIS",
+            "capital_gains_statement": "Capital gains statement",
+            "house_property_schedule": "House property schedule",
+        }
+        return labels.get(source_type, source_type.replace("_", " ").title())
+
+    @staticmethod
+    def build_field_specs(return_type: str) -> list[dict[str, Any]]:
+        specs = list(ReturnPreparationService.COMMON_FIELD_SPECS)
+        if return_type == "ITR-2":
+            specs.extend(ReturnPreparationService.ITR2_FIELD_SPECS)
+        return specs
+
+    @staticmethod
+    def expected_document_types(return_type: str, declared_data: dict[str, Any], documents_by_type: dict[str, Any]) -> list[str]:
+        expected = {"personal_info", "ais", "form26as"}
+        salary_income = get_value("income.salary_income", declared_data) or 0
+        capital_gains = sum(
+            float(get_value(path, declared_data) or 0)
+            for path in [
+                "income.short_term_capital_gains",
+                "income.ltcg_112a_amount",
+                "income.other_capital_gains_amount",
+            ]
+        )
+
+        if salary_income > 0 or "form16" in documents_by_type:
+            expected.add("form16")
+        if return_type == "ITR-2" or capital_gains > 0 or "capital_gains_statement" in documents_by_type:
+            expected.add("capital_gains_statement")
+        if get_value("income.house_property_count", declared_data) not in (None, 0, 1) or "house_property_schedule" in documents_by_type:
+            expected.add("house_property_schedule")
+        return sorted(expected)
+
+    @staticmethod
+    def _aggregate_document_value(documents: list[dict[str, Any]], path: str) -> Any:
+        values = [get_value(path, document.get("data", {})) for document in documents]
+        values = [value for value in values if value is not None]
+        if not values:
+            return None
+        if all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values):
+            return float(sum(values))
+        if all(isinstance(value, bool) for value in values):
+            return any(values)
+        if len({json.dumps(value, sort_keys=True) for value in values}) == 1:
+            return values[0]
+        return values[0]
+
+    @staticmethod
+    def _values_match(left: Any, right: Any, tolerance: float | None = None) -> bool:
+        if left is None or right is None:
+            return False
+        if isinstance(left, bool) or isinstance(right, bool):
+            return left is right
+        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+            if tolerance is None:
+                return float(left) == float(right)
+            return math.isclose(float(left), float(right), abs_tol=tolerance)
+        return left == right
+
+    @staticmethod
+    def _set_nested_value(target: dict[str, Any], path: str, value: Any) -> None:
+        current = target
+        parts = path.split(".")
+        for part in parts[:-1]:
+            current = current.setdefault(part, {})
+        current[parts[-1]] = value
+
+    @staticmethod
+    def _default_validation_payload(context: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "context": {
+                "assessment_year": context.get("assessment_year", "2026-27"),
+                "financial_year": context.get("financial_year", "2025-26"),
+                "basic_exemption_limit": context.get("basic_exemption_limit", 300000),
+            },
+            "profile": {
+                "person_type": "individual",
+                "residential_status": "resident_ordinary",
+                "age_on_previous_year_end": 30,
+                "is_director_in_company": False,
+                "held_unlisted_equity_shares": False,
+                "has_foreign_asset": False,
+                "has_foreign_signing_authority": False,
+                "has_foreign_source_income": False,
+                "has_deferred_esop_tax": False,
+                "tds_under_194n": False,
+                "is_beneficiary_of_foreign_asset": False,
+            },
+            "income": {
+                "total_income": 0,
+                "total_income_before_specified_exemptions_and_chapter_via": 0,
+                "salary_income": 0,
+                "house_property_count": 1,
+                "agricultural_income": 0,
+                "business_or_profession_income": 0,
+                "business_turnover": 0,
+                "professional_receipts": 0,
+                "short_term_capital_gains": 0,
+                "ltcg_112a_amount": 0,
+                "other_capital_gains_amount": 0,
+                "brought_forward_loss_exists": False,
+                "loss_to_carry_forward_exists": False,
+                "partnership_firm_interest_salary_bonus_commission": 0,
+            },
+            "specified_triggers": {
+                "current_account_deposits": 0,
+                "foreign_travel_expenditure": 0,
+                "electricity_expenditure": 0,
+                "aggregate_tds_tcs": 0,
+                "savings_bank_deposits": 0,
+            },
+        }
+
+    @staticmethod
+    def _derive_missing_values(validation_payload: dict[str, Any]) -> None:
+        income = validation_payload["income"]
+        if not income.get("total_income"):
+            income["total_income"] = (
+                float(income.get("salary_income", 0))
+                + float(income.get("business_or_profession_income", 0))
+                + float(income.get("short_term_capital_gains", 0))
+                + float(income.get("ltcg_112a_amount", 0))
+                + float(income.get("other_capital_gains_amount", 0))
+                + float(income.get("agricultural_income", 0))
+            )
+        if not income.get("total_income_before_specified_exemptions_and_chapter_via"):
+            income["total_income_before_specified_exemptions_and_chapter_via"] = income["total_income"]
+
+    @staticmethod
+    def prepare(payload: dict[str, Any]) -> dict[str, Any]:
+        return_type = (payload.get("return_type") or "ITR-1").upper()
+        if return_type not in {"ITR-1", "ITR-2"}:
+            raise ValidationError("return_type must be either ITR-1 or ITR-2.")
+
+        declared_data = payload.get("declared_data", {})
+        if not isinstance(declared_data, dict):
+            raise ValidationError("declared_data must be an object.")
+
+        documents = payload.get("documents", [])
+        if not isinstance(documents, list):
+            raise ValidationError("documents must be a list.")
+
+        documents_by_type: dict[str, list[dict[str, Any]]] = {}
+        for document in documents:
+            if not isinstance(document, dict):
+                raise ValidationError("Each document must be an object.")
+            document_type = document.get("document_type")
+            document_data = document.get("data")
+            if not document_type or not isinstance(document_type, str):
+                raise ValidationError("Each document must include a document_type string.")
+            if not isinstance(document_data, dict):
+                raise ValidationError(f"Document {document_type} must include a data object.")
+            documents_by_type.setdefault(document_type, []).append(document)
+
+        expected_document_types = ReturnPreparationService.expected_document_types(
+            return_type,
+            declared_data,
+            documents_by_type,
+        )
+        flags: list[dict[str, Any]] = []
+        for document_type in expected_document_types:
+            if document_type not in documents_by_type:
+                flags.append(
+                    {
+                        "code": "MISSING_DOCUMENT",
+                        "severity": "error",
+                        "document_type": document_type,
+                        "message": f"Missing expected document: {ReturnPreparationService.source_label(document_type)}.",
+                    }
+                )
+
+        validation_payload = ReturnPreparationService._default_validation_payload(payload.get("context", {}))
+        for section in ("context", "profile", "income", "specified_triggers"):
+            if isinstance(declared_data.get(section), dict):
+                validation_payload[section].update(declared_data[section])
+
+        field_comparisons: list[dict[str, Any]] = []
+        for spec in ReturnPreparationService.build_field_specs(return_type):
+            sources_observed = []
+            for source in spec["sources"]:
+                source_type = source["source_type"]
+                if source_type == "declared_data":
+                    value = get_value(source["path"], declared_data)
+                else:
+                    value = ReturnPreparationService._aggregate_document_value(
+                        documents_by_type.get(source_type, []),
+                        source["path"],
+                    )
+                if value is not None:
+                    sources_observed.append(
+                        {
+                            "source_type": source_type,
+                            "source_label": ReturnPreparationService.source_label(source_type),
+                            "path": source["path"],
+                            "value": value,
+                        }
+                    )
+
+            authoritative_values = [
+                source
+                for source in sources_observed
+                if source["source_type"] in spec.get("authoritative_source_types", [])
+            ]
+            declared_value = next(
+                (source["value"] for source in sources_observed if source["source_type"] == "declared_data"),
+                None,
+            )
+
+            status = "missing"
+            if sources_observed:
+                status = "matched"
+
+            tolerance = spec.get("tolerance")
+            if len(authoritative_values) > 1:
+                base_value = authoritative_values[0]["value"]
+                if any(
+                    not ReturnPreparationService._values_match(base_value, item["value"], tolerance)
+                    for item in authoritative_values[1:]
+                ):
+                    status = "mismatch"
+                    flags.append(
+                        {
+                            "code": "DOCUMENT_DATA_MISMATCH",
+                            "severity": "error",
+                            "field_code": spec["field_code"],
+                            "message": f"{spec['label']} does not match across uploaded documents.",
+                        }
+                    )
+            if status != "mismatch" and declared_value is not None and authoritative_values:
+                base_value = authoritative_values[0]["value"]
+                if not ReturnPreparationService._values_match(base_value, declared_value, tolerance):
+                    status = "declared_mismatch"
+                    flags.append(
+                        {
+                            "code": "DECLARED_DATA_MISMATCH",
+                            "severity": "warning",
+                            "field_code": spec["field_code"],
+                            "message": f"{spec['label']} in declared data does not match uploaded documents.",
+                        }
+                    )
+
+            final_value = None
+            final_source_type = None
+            for source_type in spec["final_source_precedence"]:
+                match = next((item for item in sources_observed if item["source_type"] == source_type), None)
+                if match is not None:
+                    final_value = match["value"]
+                    final_source_type = source_type
+                    break
+
+            if final_value is not None:
+                ReturnPreparationService._set_nested_value(validation_payload, spec["target_path"], final_value)
+            elif spec.get("required"):
+                flags.append(
+                    {
+                        "code": "MISSING_REQUIRED_FIELD_EVIDENCE",
+                        "severity": "error",
+                        "field_code": spec["field_code"],
+                        "message": f"No declared or document-backed value found for {spec['label']}.",
+                    }
+                )
+
+            field_comparisons.append(
+                {
+                    "field_code": spec["field_code"],
+                    "label": spec["label"],
+                    "target_path": spec["target_path"],
+                    "status": status,
+                    "final_value": final_value,
+                    "final_source_type": final_source_type,
+                    "sources_observed": sources_observed,
+                }
+            )
+
+        ReturnPreparationService._derive_missing_values(validation_payload)
+
+        evaluation_result = FilingEngine.evaluate(validation_payload)
+        blocking_flags = [flag for flag in flags if flag["severity"] == "error"]
+
+        return {
+            "return_type": return_type,
+            "documents_received": sorted(documents_by_type.keys()),
+            "expected_document_types": expected_document_types,
+            "ready_for_validation": not blocking_flags and evaluation_result["filing_obligation"] != "insufficient_data",
+            "flags": flags,
+            "field_comparisons": field_comparisons,
+            "prepared_return_data": {
+                "profile": validation_payload["profile"],
+                "income": validation_payload["income"],
+                "specified_triggers": validation_payload["specified_triggers"],
+            },
+            "validation_payload": validation_payload,
+            "validation_result": evaluation_result,
+        }
+
+
+SOURCE_TYPE_CATALOG = {
+    "ITR-1": [
+        {
+            "source_type": "personal_info",
+            "label": "Personal Info",
+            "mandatory": True,
+            "description": "Identity, PAN, name, and residency-related declarations.",
+            "capture_fields": ["pan", "name", "residential_status"],
+        },
+        {
+            "source_type": "form16",
+            "label": "Form 16",
+            "mandatory": True,
+            "description": "Employer-issued salary and TDS summary.",
+            "capture_fields": [
+                "pan",
+                "salary_income",
+                "total_income",
+                "total_income_before_specified_exemptions_and_chapter_via",
+            ],
+        },
+        {
+            "source_type": "form26as",
+            "label": "Form 26AS",
+            "mandatory": True,
+            "description": "Tax credit statement for TDS/TCS and taxes paid.",
+            "capture_fields": ["pan", "aggregate_tds_tcs"],
+        },
+        {
+            "source_type": "ais",
+            "label": "AIS/TIS",
+            "mandatory": True,
+            "description": "Annual information statement for cross-checking reported income.",
+            "capture_fields": ["pan", "salary_income", "total_income"],
+        },
+        {
+            "source_type": "house_property_schedule",
+            "label": "House Property Schedule",
+            "mandatory": False,
+            "description": "Property count and related house property facts when relevant.",
+            "capture_fields": ["pan", "house_property_count"],
+        },
+    ],
+    "ITR-2": [
+        {
+            "source_type": "personal_info",
+            "label": "Personal Info",
+            "mandatory": True,
+            "description": "Identity, PAN, name, and residency-related declarations.",
+            "capture_fields": ["pan", "name", "residential_status"],
+        },
+        {
+            "source_type": "form26as",
+            "label": "Form 26AS",
+            "mandatory": True,
+            "description": "Tax credit statement for TDS/TCS and taxes paid.",
+            "capture_fields": ["pan", "aggregate_tds_tcs"],
+        },
+        {
+            "source_type": "ais",
+            "label": "AIS/TIS",
+            "mandatory": True,
+            "description": "Annual information statement for cross-checking income heads.",
+            "capture_fields": ["pan", "total_income"],
+        },
+        {
+            "source_type": "form16",
+            "label": "Form 16",
+            "mandatory": False,
+            "description": "Employer-issued salary and TDS summary when salary income exists.",
+            "capture_fields": [
+                "pan",
+                "salary_income",
+                "total_income",
+                "total_income_before_specified_exemptions_and_chapter_via",
+            ],
+        },
+        {
+            "source_type": "capital_gains_statement",
+            "label": "Capital Gains Statement",
+            "mandatory": False,
+            "description": "Broker or registrar statement for capital gains details.",
+            "capture_fields": [
+                "pan",
+                "short_term_capital_gains",
+                "ltcg_112a_amount",
+                "other_capital_gains_amount",
+            ],
+        },
+        {
+            "source_type": "house_property_schedule",
+            "label": "House Property Schedule",
+            "mandatory": False,
+            "description": "Property count and related house property facts when relevant.",
+            "capture_fields": ["pan", "house_property_count"],
+        },
+    ],
+}
+
+SOURCE_TYPE_TEST_RECORDS = {
+    "personal_info": [
+        {
+            "test_record_id": "pi_itr1_standard",
+            "label": "ITR-1 resident taxpayer",
+            "return_types": ["ITR-1", "ITR-2"],
+            "data": {
+                "pan": "ABCDE1234F",
+                "name": "Aarav Sharma",
+                "residential_status": "resident_ordinary",
+                "has_foreign_asset": False,
+                "has_foreign_signing_authority": False,
+                "has_foreign_source_income": False,
+            },
+        },
+        {
+            "test_record_id": "pi_itr2_foreign_asset",
+            "label": "ITR-2 foreign asset profile",
+            "return_types": ["ITR-2"],
+            "data": {
+                "pan": "ABCDE1234F",
+                "name": "Aarav Sharma",
+                "residential_status": "resident_ordinary",
+                "has_foreign_asset": True,
+                "has_foreign_signing_authority": False,
+                "has_foreign_source_income": True,
+            },
+        },
+    ],
+    "form16": [
+        {
+            "test_record_id": "f16_itr1_salary",
+            "label": "ITR-1 salary Form 16",
+            "return_types": ["ITR-1", "ITR-2"],
+            "data": {
+                "pan": "ABCDE1234F",
+                "salary_income": 1200000,
+                "total_income": 1200000,
+                "total_income_before_specified_exemptions_and_chapter_via": 1200000,
+            },
+        },
+        {
+            "test_record_id": "f16_itr1_mid_salary",
+            "label": "ITR-1 mid-salary Form 16",
+            "return_types": ["ITR-1", "ITR-2"],
+            "data": {
+                "pan": "ABCDE1234F",
+                "salary_income": 600000,
+                "total_income": 600000,
+                "total_income_before_specified_exemptions_and_chapter_via": 600000,
+            },
+        },
+    ],
+    "form26as": [
+        {
+            "test_record_id": "26as_standard",
+            "label": "Standard Form 26AS",
+            "return_types": ["ITR-1", "ITR-2"],
+            "data": {
+                "pan": "ABCDE1234F",
+                "aggregate_tds_tcs": 45000,
+            },
+        },
+        {
+            "test_record_id": "26as_mid",
+            "label": "Mid-value Form 26AS",
+            "return_types": ["ITR-1", "ITR-2"],
+            "data": {
+                "pan": "ABCDE1234F",
+                "aggregate_tds_tcs": 22000,
+            },
+        },
+    ],
+    "ais": [
+        {
+            "test_record_id": "ais_itr1_clean",
+            "label": "AIS aligned to ITR-1",
+            "return_types": ["ITR-1", "ITR-2"],
+            "data": {
+                "pan": "ABCDE1234F",
+                "salary_income": 1200000,
+                "total_income": 1200000,
+                "short_term_capital_gains": 0,
+            },
+        },
+        {
+            "test_record_id": "ais_itr2_capital_gains",
+            "label": "AIS with capital gains",
+            "return_types": ["ITR-2"],
+            "data": {
+                "pan": "ABCDE1234F",
+                "salary_income": 900000,
+                "total_income": 1100000,
+                "short_term_capital_gains": 200000,
+            },
+        },
+    ],
+    "capital_gains_statement": [
+        {
+            "test_record_id": "cg_stmt_standard",
+            "label": "Capital gains statement",
+            "return_types": ["ITR-2"],
+            "data": {
+                "pan": "ABCDE1234F",
+                "short_term_capital_gains": 200000,
+                "ltcg_112a_amount": 0,
+                "other_capital_gains_amount": 0,
+            },
+        }
+    ],
+    "house_property_schedule": [
+        {
+            "test_record_id": "hp_single_property",
+            "label": "Single house property",
+            "return_types": ["ITR-1", "ITR-2"],
+            "data": {
+                "pan": "ABCDE1234F",
+                "house_property_count": 1,
+            },
+        },
+        {
+            "test_record_id": "hp_multiple_properties",
+            "label": "Multiple house properties",
+            "return_types": ["ITR-2"],
+            "data": {
+                "pan": "ABCDE1234F",
+                "house_property_count": 2,
+            },
+        },
+    ],
+}
+
+
+class ReturnSourceCaptureService:
+    @staticmethod
+    def get_source_types(return_type: str) -> list[dict[str, Any]]:
+        normalized = return_type.upper()
+        if normalized not in SOURCE_TYPE_CATALOG:
+            raise ValidationError("return_type must be either ITR-1 or ITR-2.")
+        return deepcopy(SOURCE_TYPE_CATALOG[normalized])
+
+    @staticmethod
+    def get_source_type_definition(return_type: str, source_type: str) -> dict[str, Any]:
+        for definition in ReturnSourceCaptureService.get_source_types(return_type):
+            if definition["source_type"] == source_type:
+                return definition
+        raise ValidationError(f"source_type {source_type} is not applicable for {return_type}.")
+
+    @staticmethod
+    def list_test_records(return_type: str, source_type: str | None = None) -> list[dict[str, Any]]:
+        ReturnSourceCaptureService.get_source_types(return_type)
+        records: list[dict[str, Any]] = []
+        for current_source_type, entries in SOURCE_TYPE_TEST_RECORDS.items():
+            if source_type and current_source_type != source_type:
+                continue
+            for entry in entries:
+                if return_type.upper() not in entry["return_types"]:
+                    continue
+                records.append(
+                    {
+                        "source_type": current_source_type,
+                        "test_record_id": entry["test_record_id"],
+                        "label": entry["label"],
+                        "data": deepcopy(entry["data"]),
+                    }
+                )
+        return records
+
+    @staticmethod
+    def get_test_record(return_type: str, source_type: str, test_record_id: str) -> dict[str, Any]:
+        for record in ReturnSourceCaptureService.list_test_records(return_type, source_type=source_type):
+            if record["test_record_id"] == test_record_id:
+                return record
+        raise ValidationError(f"Unknown test record {test_record_id} for {source_type} and {return_type}.")
+
+    @staticmethod
+    def create_session(payload: dict[str, Any]) -> ReturnSourceCaptureSession:
+        return_type = (payload.get("return_type") or "").upper()
+        ReturnSourceCaptureService.get_source_types(return_type)
+        return ReturnSourceCaptureSession.objects.create(
+            return_type=return_type,
+            assessment_year=payload.get("assessment_year", "2026-27"),
+            financial_year=payload.get("financial_year", "2025-26"),
+            taxpayer_pan=payload.get("taxpayer_pan", ""),
+            taxpayer_name=payload.get("taxpayer_name", ""),
+        )
+
+    @staticmethod
+    def validate_source_data(definition: dict[str, Any], source_data: dict[str, Any]) -> list[dict[str, Any]]:
+        errors: list[dict[str, Any]] = []
+        for field in definition["capture_fields"]:
+            if source_data.get(field) in (None, ""):
+                errors.append(
+                    {
+                        "code": "MISSING_SOURCE_FIELD",
+                        "field": field,
+                        "message": f"{definition['label']} requires field {field}.",
+                    }
+                )
+        return errors
+
+    @staticmethod
+    @transaction.atomic
+    def save_source_data(session_id: int, payload: dict[str, Any]) -> ReturnSourceDataEntry:
+        session = ReturnSourceCaptureSession.objects.get(id=session_id)
+        source_type = payload.get("source_type")
+        if not source_type:
+            raise ValidationError("source_type is required.")
+
+        definition = ReturnSourceCaptureService.get_source_type_definition(session.return_type, source_type)
+        source_data = payload.get("source_data")
+        test_record_id = payload.get("test_record_id", "")
+
+        if test_record_id:
+            record = ReturnSourceCaptureService.get_test_record(session.return_type, source_type, test_record_id)
+            source_data = record["data"]
+
+        if not isinstance(source_data, dict):
+            raise ValidationError("source_data must be an object.")
+
+        errors = ReturnSourceCaptureService.validate_source_data(definition, source_data)
+        if errors:
+            raise ValidationError(json.dumps(errors))
+
+        entry, _ = ReturnSourceDataEntry.objects.update_or_create(
+            session=session,
+            source_type=source_type,
+            defaults={
+                "source_label": definition["label"],
+                "is_mandatory": definition["mandatory"],
+                "input_mode": ReturnSourceDataEntry.InputMode.TEST_RECORD if test_record_id else ReturnSourceDataEntry.InputMode.MANUAL,
+                "test_record_id": test_record_id,
+                "source_data": source_data,
+            },
+        )
+
+        ReturnSourceCaptureService.refresh_session_status(session)
+        return entry
+
+    @staticmethod
+    def refresh_session_status(session: ReturnSourceCaptureSession) -> ReturnSourceCaptureSession:
+        saved_source_types = set(session.source_records.values_list("source_type", flat=True))
+        mandatory_types = {
+            definition["source_type"]
+            for definition in ReturnSourceCaptureService.get_source_types(session.return_type)
+            if definition["mandatory"]
+        }
+        session.status = (
+            ReturnSourceCaptureSession.Status.READY
+            if mandatory_types.issubset(saved_source_types)
+            else ReturnSourceCaptureSession.Status.DRAFT
+        )
+        session.save(update_fields=["status", "updated_at"])
+        return session
+
+    @staticmethod
+    def serialize_session(session: ReturnSourceCaptureSession) -> dict[str, Any]:
+        definitions = ReturnSourceCaptureService.get_source_types(session.return_type)
+        saved_records = {record.source_type: record for record in session.source_records.all()}
+        mandatory_pending = []
+        source_types = []
+
+        for definition in definitions:
+            saved_record = saved_records.get(definition["source_type"])
+            if definition["mandatory"] and saved_record is None:
+                mandatory_pending.append(definition["source_type"])
+            source_types.append(
+                {
+                    **definition,
+                    "captured": saved_record is not None,
+                    "captured_record": {
+                        "id": saved_record.id,
+                        "input_mode": saved_record.input_mode,
+                        "test_record_id": saved_record.test_record_id,
+                        "source_data": saved_record.source_data,
+                        "updated_at": saved_record.updated_at.isoformat(),
+                    }
+                    if saved_record
+                    else None,
+                }
+            )
+
+        return {
+            "id": session.id,
+            "return_type": session.return_type,
+            "assessment_year": session.assessment_year,
+            "financial_year": session.financial_year,
+            "taxpayer_pan": session.taxpayer_pan,
+            "taxpayer_name": session.taxpayer_name,
+            "status": session.status,
+            "mandatory_source_types_pending": mandatory_pending,
+            "source_types": source_types,
+            "created_at": session.created_at.isoformat(),
+            "updated_at": session.updated_at.isoformat(),
+        }

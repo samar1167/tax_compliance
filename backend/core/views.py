@@ -5,8 +5,14 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from .models import FilingAssessment, KnowledgeBaseVersion
-from .services import FilingEngine, KnowledgeBasePackageService, KnowledgeBaseService
+from .models import FilingAssessment, KnowledgeBaseVersion, ReturnSourceCaptureSession
+from .services import (
+    FilingEngine,
+    KnowledgeBasePackageService,
+    KnowledgeBaseService,
+    ReturnPreparationService,
+    ReturnSourceCaptureService,
+)
 
 
 @require_GET
@@ -173,3 +179,101 @@ def evaluate_assessment(request: HttpRequest) -> JsonResponse:
     )
 
     return JsonResponse({"assessment_id": record.id, "result": result}, status=201)
+
+
+@csrf_exempt
+@require_POST
+def prepare_return_validation_data(request: HttpRequest) -> JsonResponse:
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON payload."}, status=400)
+
+    try:
+        result = ReturnPreparationService.prepare(payload)
+    except ValidationError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    return JsonResponse(result, status=200)
+
+
+@require_GET
+def return_source_types(request: HttpRequest) -> JsonResponse:
+    return_type = (request.GET.get("return_type") or "").upper()
+    try:
+        source_types = ReturnSourceCaptureService.get_source_types(return_type)
+    except ValidationError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    return JsonResponse({"return_type": return_type, "source_types": source_types})
+
+
+@require_GET
+def return_source_test_records(request: HttpRequest) -> JsonResponse:
+    return_type = (request.GET.get("return_type") or "").upper()
+    source_type = request.GET.get("source_type")
+    try:
+        records = ReturnSourceCaptureService.list_test_records(return_type, source_type=source_type)
+    except ValidationError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    return JsonResponse({"return_type": return_type, "source_type": source_type, "test_records": records})
+
+
+@csrf_exempt
+@require_POST
+def create_return_source_session(request: HttpRequest) -> JsonResponse:
+    try:
+        payload = json.loads(request.body.decode("utf-8")) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON payload."}, status=400)
+
+    try:
+        session = ReturnSourceCaptureService.create_session(payload)
+    except ValidationError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    return JsonResponse({"session": ReturnSourceCaptureService.serialize_session(session)}, status=201)
+
+
+@require_GET
+def return_source_session_detail(request: HttpRequest, session_id: int) -> JsonResponse:
+    try:
+        session = ReturnSourceCaptureSession.objects.get(id=session_id)
+    except ReturnSourceCaptureSession.DoesNotExist:
+        return JsonResponse({"error": "Return source capture session not found."}, status=404)
+
+    return JsonResponse({"session": ReturnSourceCaptureService.serialize_session(session)})
+
+
+@csrf_exempt
+@require_POST
+def save_return_source_data(request: HttpRequest, session_id: int) -> JsonResponse:
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON payload."}, status=400)
+
+    try:
+        entry = ReturnSourceCaptureService.save_source_data(session_id, payload)
+        session = entry.session
+    except ReturnSourceCaptureSession.DoesNotExist:
+        return JsonResponse({"error": "Return source capture session not found."}, status=404)
+    except ValidationError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    return JsonResponse(
+        {
+            "saved_record": {
+                "id": entry.id,
+                "source_type": entry.source_type,
+                "source_label": entry.source_label,
+                "is_mandatory": entry.is_mandatory,
+                "input_mode": entry.input_mode,
+                "test_record_id": entry.test_record_id,
+                "source_data": entry.source_data,
+            },
+            "session": ReturnSourceCaptureService.serialize_session(session),
+        },
+        status=200,
+    )

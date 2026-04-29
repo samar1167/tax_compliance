@@ -8,6 +8,8 @@ from .models import (
     KnowledgeBaseTestCase,
     KnowledgeBaseThreshold,
     KnowledgeBaseVersion,
+    ReturnSourceCaptureSession,
+    ReturnSourceDataEntry,
 )
 
 
@@ -105,3 +107,26 @@ class FilingAssessmentAdmin(admin.ModelAdmin):
     list_display = ("id", "assessment_year", "financial_year", "knowledge_base_version", "created_at")
     readonly_fields = ("created_at",)
     search_fields = ("assessment_year", "financial_year")
+
+
+class ReturnSourceDataEntryInline(admin.TabularInline):
+    model = ReturnSourceDataEntry
+    extra = 0
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(ReturnSourceCaptureSession)
+class ReturnSourceCaptureSessionAdmin(admin.ModelAdmin):
+    list_display = ("id", "return_type", "assessment_year", "financial_year", "taxpayer_pan", "status", "updated_at")
+    list_filter = ("return_type", "status", "assessment_year")
+    search_fields = ("taxpayer_pan", "taxpayer_name")
+    readonly_fields = ("created_at", "updated_at")
+    inlines = [ReturnSourceDataEntryInline]
+
+
+@admin.register(ReturnSourceDataEntry)
+class ReturnSourceDataEntryAdmin(admin.ModelAdmin):
+    list_display = ("id", "session", "source_type", "is_mandatory", "input_mode", "updated_at")
+    list_filter = ("source_type", "is_mandatory", "input_mode", "session__return_type")
+    search_fields = ("source_type", "session__taxpayer_pan", "test_record_id")
+    readonly_fields = ("created_at", "updated_at")

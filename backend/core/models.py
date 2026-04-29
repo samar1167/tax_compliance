@@ -178,3 +178,55 @@ class FilingAssessment(models.Model):
 
     def __str__(self) -> str:
         return f"Assessment #{self.pk} - {self.assessment_year}"
+
+
+class ReturnSourceCaptureSession(models.Model):
+    class ReturnType(models.TextChoices):
+        ITR1 = "ITR-1", "ITR-1"
+        ITR2 = "ITR-2", "ITR-2"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        READY = "ready", "Ready"
+
+    assessment_year = models.CharField(max_length=16, default="2026-27")
+    financial_year = models.CharField(max_length=16, default="2025-26")
+    return_type = models.CharField(max_length=16, choices=ReturnType.choices)
+    taxpayer_pan = models.CharField(max_length=16, blank=True)
+    taxpayer_name = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-updated_at",)
+
+    def __str__(self) -> str:
+        return f"{self.return_type} source capture #{self.pk}"
+
+
+class ReturnSourceDataEntry(models.Model):
+    class InputMode(models.TextChoices):
+        MANUAL = "manual_entry", "Manual Entry"
+        TEST_RECORD = "test_record", "Test Record"
+
+    session = models.ForeignKey(
+        ReturnSourceCaptureSession,
+        related_name="source_records",
+        on_delete=models.CASCADE,
+    )
+    source_type = models.CharField(max_length=64)
+    source_label = models.CharField(max_length=255)
+    is_mandatory = models.BooleanField(default=False)
+    input_mode = models.CharField(max_length=32, choices=InputMode.choices, default=InputMode.MANUAL)
+    test_record_id = models.CharField(max_length=128, blank=True)
+    source_data = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("session", "source_type")
+        ordering = ("source_type",)
+
+    def __str__(self) -> str:
+        return f"{self.session_id}:{self.source_type}"
