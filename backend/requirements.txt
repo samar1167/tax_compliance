@@ -1,0 +1,4 @@
+django==5.1.5
+PyYAML==6.0.2
+django-cors-headers==4.6.0
+gunicorn==23.0.0

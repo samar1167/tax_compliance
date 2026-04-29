@@ -1,0 +1,24 @@
+test_cases:
+  - case_id: "TC_101"
+    title: "Synthetic ITR-X rule activates when house_property_count exceeds 1"
+    input_payload:
+      context:
+        assessment_year: "2026-27"
+      profile:
+        person_type: "individual"
+        residential_status: "resident_ordinary"
+        age_on_previous_year_end: 40
+      income:
+        total_income: 1400000
+        total_income_before_specified_exemptions_and_chapter_via: 1400000
+        house_property_count: 2
+        agricultural_income: 0
+        short_term_capital_gains: 0
+        ltcg_112a_amount: 0
+        other_capital_gains_amount: 0
+      specified_triggers: {}
+    expected_output:
+      filing_obligation: "required"
+      recommended_form: "ITR-X"
+      itr1_ineligibility_reasons_contains:
+        - "MULTIPLE_HOUSE_PROPERTIES"

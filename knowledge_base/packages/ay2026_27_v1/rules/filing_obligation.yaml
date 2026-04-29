@@ -1,0 +1,381 @@
+rules:
+  - rule_id: "OBL_001"
+    module: "filing_obligation"
+    title: "Total income exceeds basic exemption limit"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 100
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2"]
+    inputs_required: ["income.total_income", "context.basic_exemption_limit"]
+    when:
+      gt:
+        left: "income.total_income"
+        right: "context.basic_exemption_limit"
+    effect:
+      decision_updates:
+        - path: "filing_obligation"
+          operation: "set"
+          value: "required"
+        - path: "filing_obligation_reasons"
+          operation: "append"
+          value: "TOTAL_INCOME_ABOVE_BASIC_EXEMPTION"
+      reason_code: "TOTAL_INCOME_ABOVE_BASIC_EXEMPTION"
+      severity: "info"
+      terminal: false
+    explanation_template: "Total income exceeds the applicable basic exemption limit."
+    source_refs:
+      - source_id: "sec139"
+        label: "Section 139(1)"
+        url: "https://incometaxindia.gov.in/Acts/Income-tax%20Act%2C%201961/2025/102120000000091167.htm"
+        authority_type: "statute"
+        notes: "Main filing obligation."
+
+  - rule_id: "OBL_002"
+    module: "filing_obligation"
+    title: "Income exceeds threshold before specified exemptions and Chapter VI-A deductions"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 101
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2"]
+    inputs_required:
+      - "income.total_income_before_specified_exemptions_and_chapter_via"
+      - "context.basic_exemption_limit"
+    when:
+      gt:
+        left: "income.total_income_before_specified_exemptions_and_chapter_via"
+        right: "context.basic_exemption_limit"
+    effect:
+      decision_updates:
+        - path: "filing_obligation"
+          operation: "set"
+          value: "required"
+        - path: "filing_obligation_reasons"
+          operation: "append"
+          value: "PRE_DEDUCTION_INCOME_ABOVE_BASIC_EXEMPTION"
+      reason_code: "PRE_DEDUCTION_INCOME_ABOVE_BASIC_EXEMPTION"
+      severity: "info"
+      terminal: false
+    explanation_template: "Income before specified exemptions and Chapter VI-A deductions exceeds the basic exemption limit."
+    source_refs:
+      - source_id: "sec139"
+        label: "Section 139(1) later proviso"
+        url: "https://incometaxindia.gov.in/Acts/Income-tax%20Act%2C%201961/2025/102120000000091167.htm"
+        authority_type: "statute"
+        notes: "Requires filing without giving effect to specified exemptions and Chapter VI-A."
+
+  - rule_id: "OBL_003"
+    module: "filing_obligation"
+    title: "Resident with foreign asset or foreign signing authority must file"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 110
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2"]
+    inputs_required:
+      - "profile.has_foreign_asset"
+      - "profile.has_foreign_signing_authority"
+      - "profile.is_beneficiary_of_foreign_asset"
+    when:
+      any:
+        - is_true: "profile.has_foreign_asset"
+        - is_true: "profile.has_foreign_signing_authority"
+        - is_true: "profile.is_beneficiary_of_foreign_asset"
+    effect:
+      decision_updates:
+        - path: "filing_obligation"
+          operation: "set"
+          value: "required"
+        - path: "filing_obligation_reasons"
+          operation: "append"
+          value: "FOREIGN_ASSET_OR_SIGNING_AUTHORITY_TRIGGER"
+      reason_code: "FOREIGN_ASSET_OR_SIGNING_AUTHORITY_TRIGGER"
+      severity: "info"
+      terminal: false
+    explanation_template: "A resident holding foreign assets, foreign signing authority, or certain beneficiary interests must file a return."
+    source_refs:
+      - source_id: "sec139"
+        label: "Section 139(1) foreign asset proviso"
+        url: "https://incometaxindia.gov.in/Acts/Income-tax%20Act%2C%201961/2025/102120000000091167.htm"
+        authority_type: "statute"
+        notes: "Applies to resident other than not ordinarily resident."
+
+  - rule_id: "OBL_004"
+    module: "filing_obligation"
+    title: "Current account deposits exceed Rs. 1 crore"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 120
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2"]
+    inputs_required: ["specified_triggers.current_account_deposits"]
+    when:
+      gt:
+        left: "specified_triggers.current_account_deposits"
+        right: 10000000
+    effect:
+      decision_updates:
+        - path: "filing_obligation"
+          operation: "set"
+          value: "required"
+        - path: "filing_obligation_reasons"
+          operation: "append"
+          value: "CURRENT_ACCOUNT_DEPOSITS_ABOVE_1CR"
+      reason_code: "CURRENT_ACCOUNT_DEPOSITS_ABOVE_1CR"
+      severity: "info"
+      terminal: false
+    explanation_template: "Current account deposits exceeded Rs. 1 crore during the previous year."
+    source_refs:
+      - source_id: "sec139"
+        label: "Section 139(1) seventh proviso"
+        url: "https://incometaxindia.gov.in/Acts/Income-tax%20Act%2C%201961/2025/102120000000091167.htm"
+        authority_type: "statute"
+        notes: "Current account deposit trigger."
+
+  - rule_id: "OBL_005"
+    module: "filing_obligation"
+    title: "Foreign travel expenditure exceeds Rs. 2 lakh"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 121
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2"]
+    inputs_required: ["specified_triggers.foreign_travel_expenditure"]
+    when:
+      gt:
+        left: "specified_triggers.foreign_travel_expenditure"
+        right: 200000
+    effect:
+      decision_updates:
+        - path: "filing_obligation"
+          operation: "set"
+          value: "required"
+        - path: "filing_obligation_reasons"
+          operation: "append"
+          value: "FOREIGN_TRAVEL_EXPENDITURE_ABOVE_2L"
+      reason_code: "FOREIGN_TRAVEL_EXPENDITURE_ABOVE_2L"
+      severity: "info"
+      terminal: false
+    explanation_template: "Foreign travel expenditure exceeded Rs. 2 lakh during the previous year."
+    source_refs:
+      - source_id: "sec139"
+        label: "Section 139(1) seventh proviso"
+        url: "https://incometaxindia.gov.in/Acts/Income-tax%20Act%2C%201961/2025/102120000000091167.htm"
+        authority_type: "statute"
+        notes: "Foreign travel expenditure trigger."
+
+  - rule_id: "OBL_006"
+    module: "filing_obligation"
+    title: "Electricity expenditure exceeds Rs. 1 lakh"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 122
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2"]
+    inputs_required: ["specified_triggers.electricity_expenditure"]
+    when:
+      gt:
+        left: "specified_triggers.electricity_expenditure"
+        right: 100000
+    effect:
+      decision_updates:
+        - path: "filing_obligation"
+          operation: "set"
+          value: "required"
+        - path: "filing_obligation_reasons"
+          operation: "append"
+          value: "ELECTRICITY_EXPENDITURE_ABOVE_1L"
+      reason_code: "ELECTRICITY_EXPENDITURE_ABOVE_1L"
+      severity: "info"
+      terminal: false
+    explanation_template: "Electricity expenditure exceeded Rs. 1 lakh during the previous year."
+    source_refs:
+      - source_id: "sec139"
+        label: "Section 139(1) seventh proviso"
+        url: "https://incometaxindia.gov.in/Acts/Income-tax%20Act%2C%201961/2025/102120000000091167.htm"
+        authority_type: "statute"
+        notes: "Electricity expenditure trigger."
+
+  - rule_id: "OBL_007"
+    module: "filing_obligation"
+    title: "Business turnover exceeds Rs. 60 lakh"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 123
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2"]
+    inputs_required: ["income.business_turnover"]
+    when:
+      gt:
+        left: "income.business_turnover"
+        right: 6000000
+    effect:
+      decision_updates:
+        - path: "filing_obligation"
+          operation: "set"
+          value: "required"
+        - path: "filing_obligation_reasons"
+          operation: "append"
+          value: "BUSINESS_TURNOVER_ABOVE_60L"
+      reason_code: "BUSINESS_TURNOVER_ABOVE_60L"
+      severity: "info"
+      terminal: false
+    explanation_template: "Business turnover exceeded Rs. 60 lakh during the previous year."
+    source_refs:
+      - source_id: "rule12ab"
+        label: "Rule 12AB"
+        url: "https://incometaxindia.gov.in/Rules/Income-Tax%20Rules/103520000000090150.htm"
+        authority_type: "rule"
+        notes: "Business turnover trigger."
+
+  - rule_id: "OBL_008"
+    module: "filing_obligation"
+    title: "Professional receipts exceed Rs. 10 lakh"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 124
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2"]
+    inputs_required: ["income.professional_receipts"]
+    when:
+      gt:
+        left: "income.professional_receipts"
+        right: 1000000
+    effect:
+      decision_updates:
+        - path: "filing_obligation"
+          operation: "set"
+          value: "required"
+        - path: "filing_obligation_reasons"
+          operation: "append"
+          value: "PROFESSIONAL_RECEIPTS_ABOVE_10L"
+      reason_code: "PROFESSIONAL_RECEIPTS_ABOVE_10L"
+      severity: "info"
+      terminal: false
+    explanation_template: "Professional receipts exceeded Rs. 10 lakh during the previous year."
+    source_refs:
+      - source_id: "rule12ab"
+        label: "Rule 12AB"
+        url: "https://incometaxindia.gov.in/Rules/Income-Tax%20Rules/103520000000090150.htm"
+        authority_type: "rule"
+        notes: "Professional receipts trigger."
+
+  - rule_id: "OBL_009"
+    module: "filing_obligation"
+    title: "Aggregate TDS/TCS exceeds Rule 12AB threshold"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 130
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2"]
+    inputs_required:
+      - "profile.age_on_previous_year_end"
+      - "profile.residential_status"
+      - "specified_triggers.aggregate_tds_tcs"
+    when:
+      any:
+        - all:
+            - gte:
+                left: "profile.age_on_previous_year_end"
+                right: 60
+            - eq:
+                left: "profile.residential_status"
+                right: "resident_ordinary"
+            - gte:
+                left: "specified_triggers.aggregate_tds_tcs"
+                right: 50000
+        - all:
+            - lt:
+                left: "profile.age_on_previous_year_end"
+                right: 60
+            - gte:
+                left: "specified_triggers.aggregate_tds_tcs"
+                right: 25000
+        - all:
+            - ne:
+                left: "profile.residential_status"
+                right: "resident_ordinary"
+            - gte:
+                left: "specified_triggers.aggregate_tds_tcs"
+                right: 25000
+    effect:
+      decision_updates:
+        - path: "filing_obligation"
+          operation: "set"
+          value: "required"
+        - path: "filing_obligation_reasons"
+          operation: "append"
+          value: "AGGREGATE_TDS_TCS_ABOVE_RULE12AB_THRESHOLD"
+      reason_code: "AGGREGATE_TDS_TCS_ABOVE_RULE12AB_THRESHOLD"
+      severity: "info"
+      terminal: false
+    explanation_template: "Aggregate TDS/TCS exceeded the Rule 12AB filing trigger threshold."
+    source_refs:
+      - source_id: "rule12ab"
+        label: "Rule 12AB"
+        url: "https://incometaxindia.gov.in/Rules/Income-Tax%20Rules/103520000000090150.htm"
+        authority_type: "rule"
+        notes: "Rs. 25,000 general threshold; Rs. 50,000 for resident individuals aged 60 or more."
+
+  - rule_id: "OBL_010"
+    module: "filing_obligation"
+    title: "Savings bank deposits exceed Rs. 50 lakh"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 131
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2"]
+    inputs_required: ["specified_triggers.savings_bank_deposits"]
+    when:
+      gte:
+        left: "specified_triggers.savings_bank_deposits"
+        right: 5000000
+    effect:
+      decision_updates:
+        - path: "filing_obligation"
+          operation: "set"
+          value: "required"
+        - path: "filing_obligation_reasons"
+          operation: "append"
+          value: "SAVINGS_BANK_DEPOSITS_ABOVE_50L"
+      reason_code: "SAVINGS_BANK_DEPOSITS_ABOVE_50L"
+      severity: "info"
+      terminal: false
+    explanation_template: "Savings bank deposits reached Rs. 50 lakh or more during the previous year."
+    source_refs:
+      - source_id: "rule12ab"
+        label: "Rule 12AB"
+        url: "https://incometaxindia.gov.in/Rules/Income-Tax%20Rules/103520000000090150.htm"
+        authority_type: "rule"
+        notes: "Savings account deposit trigger."

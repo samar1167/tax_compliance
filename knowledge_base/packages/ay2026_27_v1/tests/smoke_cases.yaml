@@ -1,0 +1,73 @@
+test_cases:
+  - case_id: "TC_001"
+    title: "Resident salaried individual eligible for ITR-1"
+    input_payload:
+      context:
+        assessment_year: "2026-27"
+      profile:
+        person_type: "individual"
+        residential_status: "resident_ordinary"
+        age_on_previous_year_end: 32
+      income:
+        total_income: 1200000
+        total_income_before_specified_exemptions_and_chapter_via: 1200000
+        house_property_count: 1
+        agricultural_income: 0
+        short_term_capital_gains: 0
+        ltcg_112a_amount: 0
+        other_capital_gains_amount: 0
+      specified_triggers: {}
+    expected_output:
+      filing_obligation: "required"
+      recommended_form: "ITR-1"
+      filing_obligation_reasons_contains:
+        - "TOTAL_INCOME_ABOVE_BASIC_EXEMPTION"
+
+  - case_id: "TC_002"
+    title: "RNOR is routed away from ITR-1 to ITR-2"
+    input_payload:
+      context:
+        assessment_year: "2026-27"
+      profile:
+        person_type: "individual"
+        residential_status: "resident_not_ordinary"
+        age_on_previous_year_end: 44
+      income:
+        total_income: 900000
+        total_income_before_specified_exemptions_and_chapter_via: 900000
+        house_property_count: 1
+        agricultural_income: 0
+        short_term_capital_gains: 0
+        ltcg_112a_amount: 0
+        other_capital_gains_amount: 0
+      specified_triggers: {}
+    expected_output:
+      filing_obligation: "required"
+      recommended_form: "ITR-2"
+      itr1_ineligibility_reasons_contains:
+        - "RESIDENTIAL_STATUS_NOT_ROR"
+
+  - case_id: "TC_003"
+    title: "Foreign travel trigger creates filing obligation"
+    input_payload:
+      context:
+        assessment_year: "2026-27"
+      profile:
+        person_type: "individual"
+        residential_status: "resident_ordinary"
+        age_on_previous_year_end: 29
+      income:
+        total_income: 200000
+        total_income_before_specified_exemptions_and_chapter_via: 200000
+        house_property_count: 1
+        agricultural_income: 0
+        short_term_capital_gains: 0
+        ltcg_112a_amount: 0
+        other_capital_gains_amount: 0
+      specified_triggers:
+        foreign_travel_expenditure: 300000
+    expected_output:
+      filing_obligation: "required"
+      recommended_form: "ITR-1"
+      filing_obligation_reasons_contains:
+        - "FOREIGN_TRAVEL_EXPENDITURE_ABOVE_2L"

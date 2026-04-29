@@ -1,0 +1,118 @@
+schema_version: "1.0"
+entity: "tax_rule"
+description: "Declarative rule schema for Indian personal tax compliance modules."
+fields:
+  rule_id:
+    type: string
+    required: true
+  module:
+    type: string
+    required: true
+  title:
+    type: string
+    required: true
+  version:
+    type: string
+    required: true
+  effective_from_ay:
+    type: string
+    required: true
+  effective_to_ay:
+    type: [string, "null"]
+    required: false
+  priority:
+    type: integer
+    required: true
+  taxpayer_scope:
+    type: object
+    required: true
+    fields:
+      person_types:
+        type: array
+        items: string
+      residential_statuses:
+        type: array
+        items: string
+      return_forms_in_scope:
+        type: array
+        items: string
+  inputs_required:
+    type: array
+    items: string
+  applies_if:
+    type: object
+    description: "Optional precondition block evaluated before the rule's main predicate."
+  when:
+    type: object
+    description: "Boolean predicate tree using all/any/not and primitive comparisons."
+  effect:
+    type: object
+    required: true
+    fields:
+      decision_updates:
+        type: array
+        items:
+          type: object
+      reason_code:
+        type: string
+      severity:
+        type: string
+      terminal:
+        type: boolean
+  explanation_template:
+    type: string
+  source_refs:
+    type: array
+    required: true
+    items:
+      type: object
+      fields:
+        source_id:
+          type: string
+        label:
+          type: string
+        url:
+          type: string
+        authority_type:
+          type: string
+        notes:
+          type: string
+
+predicate_dsl:
+  boolean_nodes:
+    - all
+    - any
+    - not
+  comparison_operators:
+    - eq
+    - ne
+    - gt
+    - gte
+    - lt
+    - lte
+    - in
+    - not_in
+    - includes
+    - excludes
+    - exists
+    - is_true
+    - is_false
+
+effect_examples:
+  - decision_updates:
+      - path: "filing_obligation"
+        operation: "set"
+        value: "required"
+    reason_code: "TOTAL_INCOME_ABOVE_BASIC_EXEMPTION"
+    severity: "info"
+    terminal: false
+  - decision_updates:
+      - path: "ineligible_forms"
+        operation: "append_unique"
+        value: "ITR-1"
+      - path: "itr1_eligible"
+        operation: "set"
+        value: false
+    reason_code: "ITR1_EXCLUDED_FOREIGN_ASSET"
+    severity: "info"
+    terminal: false

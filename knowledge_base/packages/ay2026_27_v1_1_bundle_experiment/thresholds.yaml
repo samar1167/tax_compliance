@@ -1,0 +1,21 @@
+thresholds:
+  - threshold_code: "BASIC_EXEMPTION_LIMIT_DEFAULT"
+    label: "Default basic exemption limit for MVP runtime"
+    value: 300000
+    value_type: "number"
+    unit: "INR"
+  - threshold_code: "ITR1_TOTAL_INCOME_CAP"
+    label: "ITR-1 total income cap"
+    value: 5000000
+    value_type: "number"
+    unit: "INR"
+  - threshold_code: "ITR1_AGRICULTURAL_INCOME_CAP"
+    label: "ITR-1 agricultural income cap"
+    value: 5000
+    value_type: "number"
+    unit: "INR"
+  - threshold_code: "ITR1_LTCG_112A_CAP"
+    label: "ITR-1 LTCG 112A cap"
+    value: 125000
+    value_type: "number"
+    unit: "INR"

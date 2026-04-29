@@ -1,0 +1,8 @@
+bundles:
+  - bundle_code: "synthetic_itrx_experiment"
+    title: "Synthetic ITR-X Experiment"
+    description: "Non-official test bundle that routes multiple-house-property cases to ITR-X."
+    is_default: false
+    is_active: false
+    depends_on_bundle_codes: []
+    blocks_bundle_codes: []

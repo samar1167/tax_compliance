@@ -1,0 +1,172 @@
+rules:
+  - rule_id: "ITR1_ELIG_001"
+    module: "itr_selection"
+    title: "Base positive eligibility for ITR-1"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 200
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2", "ITR-X"]
+    inputs_required:
+      - "profile.person_type"
+      - "profile.residential_status"
+      - "income.total_income"
+      - "income.house_property_count"
+      - "income.agricultural_income"
+      - "income.ltcg_112a_amount"
+      - "income.business_or_profession_income"
+      - "income.short_term_capital_gains"
+      - "income.other_capital_gains_amount"
+    when:
+      all:
+        - eq:
+            left: "profile.person_type"
+            right: "individual"
+        - eq:
+            left: "profile.residential_status"
+            right: "resident_ordinary"
+        - lte:
+            left: "income.total_income"
+            right: 5000000
+        - lte:
+            left: "income.house_property_count"
+            right: 1
+        - lte:
+            left: "income.agricultural_income"
+            right: 5000
+        - lte:
+            left: "income.ltcg_112a_amount"
+            right: 125000
+        - eq:
+            left: "income.business_or_profession_income"
+            right: 0
+        - eq:
+            left: "income.short_term_capital_gains"
+            right: 0
+        - eq:
+            left: "income.other_capital_gains_amount"
+            right: 0
+    effect:
+      decision_updates:
+        - path: "eligible_forms"
+          operation: "append_unique"
+          value: "ITR-1"
+        - path: "itr1_eligible"
+          operation: "set"
+          value: true
+      reason_code: "ITR1_BASE_ELIGIBLE"
+      severity: "info"
+      terminal: false
+    explanation_template: "The taxpayer satisfies the base resident-individual, income-head, and threshold conditions for ITR-1."
+    source_refs:
+      - source_id: "itr1_manual"
+        label: "ITR-1 manual"
+        url: "https://www.incometax.gov.in/iec/foportal/node/11455"
+        authority_type: "official_guidance"
+        notes: "Resident individual, up to Rs. 50 lakh, limited income heads."
+
+  - rule_id: "ITRX_TEST_001"
+    module: "itr_selection"
+    title: "Route to synthetic ITR-X when more than one house property exists"
+    version: "2026.27.test"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 290
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2", "ITR-X"]
+    inputs_required:
+      - "income.house_property_count"
+    when:
+      gt:
+        left: "income.house_property_count"
+        right: 1
+    effect:
+      decision_updates:
+        - path: "ineligible_forms"
+          operation: "append_unique"
+          value: "ITR-1"
+        - path: "ineligible_forms"
+          operation: "append_unique"
+          value: "ITR-2"
+        - path: "itr1_eligible"
+          operation: "set"
+          value: false
+        - path: "itr2_eligible"
+          operation: "set"
+          value: false
+        - path: "itr1_ineligibility_reasons"
+          operation: "append"
+          value: "MULTIPLE_HOUSE_PROPERTIES"
+        - path: "itr2_ineligibility_reasons"
+          operation: "append"
+          value: "SYNTHETIC_TEST_RULE_ITRX_REQUIRED"
+        - path: "eligible_forms"
+          operation: "append_unique"
+          value: "ITR-X"
+        - path: "recommended_form"
+          operation: "set"
+          value: "ITR-X"
+      reason_code: "SYNTHETIC_TEST_RULE_ITRX_REQUIRED"
+      severity: "info"
+      terminal: false
+    explanation_template: "Synthetic test rule: taxpayers with more than one house property must use ITR-X."
+    source_refs:
+      - source_id: "synthetic_test_rule"
+        label: "Synthetic test rule"
+        url: "https://example.invalid/itrx-test-rule"
+        authority_type: "internal_test_rule"
+        notes: "Workflow validation rule only."
+
+  - rule_id: "ITR2_ELIG_001"
+    module: "itr_selection"
+    title: "Route to ITR-2 when not eligible for ITR-1 and no business/profession income exists"
+    version: "2026.27.2"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 300
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2", "ITR-X"]
+    inputs_required:
+      - "decision.itr1_eligible"
+      - "decision.itr2_eligible"
+      - "income.business_or_profession_income"
+      - "income.partnership_firm_interest_salary_bonus_commission"
+    when:
+      all:
+        - eq:
+            left: "decision.itr1_eligible"
+            right: false
+        - eq:
+            left: "decision.itr2_eligible"
+            right: true
+        - eq:
+            left: "income.business_or_profession_income"
+            right: 0
+        - eq:
+            left: "income.partnership_firm_interest_salary_bonus_commission"
+            right: 0
+    effect:
+      decision_updates:
+        - path: "eligible_forms"
+          operation: "append_unique"
+          value: "ITR-2"
+        - path: "recommended_form"
+          operation: "set"
+          value: "ITR-2"
+      reason_code: "ITR2_SELECTED"
+      severity: "info"
+      terminal: false
+    explanation_template: "The taxpayer is not eligible for ITR-1 and has no business or profession income, so ITR-2 applies."
+    source_refs:
+      - source_id: "itr2_help"
+        label: "ITR-2 help"
+        url: "https://www.incometax.gov.in/iec/foportal/help/all-topics/e-filing-services/itr-2"
+        authority_type: "official_guidance"
+        notes: "ITR-2 applies where ITR-1 is not available and business/profession income is absent."

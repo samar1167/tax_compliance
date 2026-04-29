@@ -1,0 +1,6 @@
+thresholds:
+  - threshold_code: "BASIC_EXEMPTION_LIMIT_DEFAULT"
+    label: "Default basic exemption limit for MVP runtime"
+    value: 300000
+    value_type: "number"
+    unit: "INR"

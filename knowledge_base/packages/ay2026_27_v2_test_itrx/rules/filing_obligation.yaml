@@ -1,0 +1,35 @@
+rules:
+  - rule_id: "OBL_001"
+    module: "filing_obligation"
+    title: "Total income exceeds basic exemption limit"
+    version: "2026.27.1"
+    effective_from_ay: "2026-27"
+    effective_to_ay: null
+    priority: 100
+    taxpayer_scope:
+      person_types: ["individual"]
+      residential_statuses: ["resident_ordinary", "resident_not_ordinary", "non_resident", "deemed_resident_not_ordinary"]
+      return_forms_in_scope: ["ITR-1", "ITR-2", "ITR-X"]
+    inputs_required: ["income.total_income", "context.basic_exemption_limit"]
+    when:
+      gt:
+        left: "income.total_income"
+        right: "context.basic_exemption_limit"
+    effect:
+      decision_updates:
+        - path: "filing_obligation"
+          operation: "set"
+          value: "required"
+        - path: "filing_obligation_reasons"
+          operation: "append"
+          value: "TOTAL_INCOME_ABOVE_BASIC_EXEMPTION"
+      reason_code: "TOTAL_INCOME_ABOVE_BASIC_EXEMPTION"
+      severity: "info"
+      terminal: false
+    explanation_template: "Total income exceeds the applicable basic exemption limit."
+    source_refs:
+      - source_id: "sec139"
+        label: "Section 139(1)"
+        url: "https://incometaxindia.gov.in/Acts/Income-tax%20Act%2C%201961/2025/102120000000091167.htm"
+        authority_type: "statute"
+        notes: "Main filing obligation."
