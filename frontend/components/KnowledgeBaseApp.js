@@ -221,10 +221,7 @@ export default function KnowledgeBaseApp() {
       <section className="hero">
         <div className="hero__copy">
           <p className="eyebrow">Knowledge Base Operations</p>
-          <h1>Version control first, then import, test, validate, and finalize new rules.</h1>
-          <p className="hero__lede">
-            This page is organized around version selection and control. New rule intake follows the backend’s package-based workflow: import schema/package, inspect the draft, run tests and validation, then finalize it as the next active version.
-          </p>
+          <h1>KB Manager</h1>
           <div className="actions">
             <a className="button" href="/">
               Tax Workflow
